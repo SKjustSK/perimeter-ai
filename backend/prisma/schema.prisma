@@ -1,0 +1,25 @@
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Camera {
+  id         String      @id @default(uuid())
+  name       String
+  rtspUrl    String?
+  status     String      @default("active")
+  detections Detection[]
+  createdAt  DateTime    @default(now())
+}
+
+model Detection {
+  id        String   @id @default(uuid())
+  cameraId  String
+  camera    Camera   @relation(fields: [cameraId], references: [id])
+  bbox      Json
+  timestamp DateTime
+  createdAt DateTime @default(now())
+}
