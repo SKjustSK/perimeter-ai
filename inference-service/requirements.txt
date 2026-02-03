@@ -4,3 +4,7 @@ python-multipart==0.0.6
 pydantic==2.3.0
 numpy==1.24.3
 opencv-python-headless==4.8.0.76
+# Real inference dependencies
+onnxruntime==1.16.3
+ultralytics==8.0.196
+# torch + torchvision pulled in as transitive deps of ultralytics
