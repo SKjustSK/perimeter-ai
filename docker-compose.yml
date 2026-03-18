@@ -23,3 +23,50 @@ services:
       - "6333:6333"
     volumes:
       - ./qdrant_data:/qdrant/storage
+
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - DATABASE_URL=postgresql://admin:password@db:5432/perimeter?schema=public
+      - QDRANT_URL=http://qdrant:6333
+      - INFERENCE_API_URL=http://inference-service:8000
+      - SHARED_UPLOAD_DIR=/shared-uploads
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_started
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+      - shared-uploads:/shared-uploads
+
+  inference-service:
+    build:
+      context: ./inference-service
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - SHARED_UPLOAD_DIR=/shared-uploads
+    volumes:
+      - ./inference-service:/app
+      - shared-uploads:/shared-uploads
+      - ultralytics-cache:/root/.ultralytics
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+volumes:
+  shared-uploads:
+  ultralytics-cache:
