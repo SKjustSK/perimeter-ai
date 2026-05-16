@@ -1,0 +1,37 @@
+{
+  "name": "core-api",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "tsx watch src/server.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1067.0",
+    "@aws-sdk/s3-request-presigner": "^3.1067.0",
+    "@prisma/client": "^5.22.0",
+    "@qdrant/js-client-rest": "^1.18.0",
+    "axios": "^1.18.0",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "form-data": "^4.0.6",
+    "multer": "^2.2.0",
+    "redis": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/multer": "^2.1.0",
+    "@types/node": "^25.9.3",
+    "prisma": "^5.22.0",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
+  }
+}
