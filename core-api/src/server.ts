@@ -1,0 +1,24 @@
+import app from './app.js';
+import redisClient from './config/redis.js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const PORT = process.env.PORT || 3000;
+
+// Connect to Redis queue before starting HTTP server
+const startServer = async () => {
+  try {
+    await redisClient.connect();
+    console.log('[+] Connected to Redis Queue');
+
+    app.listen(PORT, () => {
+      console.log(`[+] core-api online on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('[-] Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+startServer();
