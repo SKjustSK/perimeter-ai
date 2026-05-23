@@ -1,5 +1,6 @@
 services:
-  # Database Layer
+  # ── Infrastructure ────────────────────────────────────────────────────────
+
   postgres:
     image: postgres:15-alpine
     container_name: perimeter-postgres
@@ -11,17 +12,25 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d perimeter_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
 
-  # Message Broker
   redis:
     image: redis:7-alpine
     container_name: perimeter-redis
     ports:
       - "6379:6379"
-    restart: always
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
-  # Object Storage
   minio:
     image: minio/minio:latest
     container_name: perimeter-minio
@@ -29,14 +38,18 @@ services:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000" # API
-      - "9001:9001" # Console UI
+      - "9000:9000"
+      - "9001:9001"
     volumes:
       - minio_data:/data
     command: server /data --console-address ":9001"
-    restart: always
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
-  # Vector Database
   qdrant:
     image: qdrant/qdrant:latest
     container_name: perimeter-qdrant
@@ -45,7 +58,93 @@ services:
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
-    restart: always 
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Application Services ──────────────────────────────────────────────────
+
+  core-api:
+    build:
+      context: ./core-api
+      dockerfile: Dockerfile
+    container_name: perimeter-core-api
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:your_secure_password@postgres:5432/perimeter_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_NAME: video_jobs
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_REGION: us-east-1
+      STORAGE_BUCKET: surveillance-videos
+      QDRANT_URL: http://qdrant:6333
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  inference-engine:
+    build:
+      context: ./inference-engine
+      dockerfile: Dockerfile
+    container_name: perimeter-inference-engine
+    ports:
+      - "5001:5001"
+    environment:
+      DATABASE_URL: postgresql://postgres:your_secure_password@postgres:5432/perimeter_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      QUEUE_NAME: video_jobs
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      STORAGE_BUCKET: surveillance-videos
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      COLLECTION_NAME: targets
+      ENGINE_API_PORT: 5001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: http://localhost:3000
+    container_name: perimeter-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      core-api:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   postgres_data:
