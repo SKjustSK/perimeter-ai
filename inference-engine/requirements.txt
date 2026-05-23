@@ -94,7 +94,6 @@ tb-nightly==2.21.0a20251023
 tensorboard==2.20.0
 tensorboard-data-server==0.7.2
 torch==2.12.0
-torchreid @ git+https://github.com/KaiyangZhou/deep-person-reid.git@f8cd150fdf77e8d9e1ed143b7f308c2c609ded50
 torchvision==0.27.0
 tqdm==4.68.2
 triton==3.7.0

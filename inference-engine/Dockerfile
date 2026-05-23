@@ -12,8 +12,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
+# Step 1: Install all standard packages first (provides build-time dependencies like numpy)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Step 2: Install GitHub-sourced packages (e.g. torchreid) after standard packages are ready
+# We use --no-build-isolation because torchreid's setup.py imports numpy at build-time.
+COPY requirements-github.txt .
+RUN pip install --no-cache-dir --no-build-isolation -r requirements-github.txt
+
 
 # Copy application source
 COPY src ./src
