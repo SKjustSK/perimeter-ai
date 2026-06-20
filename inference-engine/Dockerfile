@@ -25,6 +25,7 @@ RUN pip install --no-cache-dir --no-build-isolation -r requirements-github.txt
 # Copy application source
 COPY src ./src
 COPY main.py .
+COPY worker.py .
 
 EXPOSE 5001
 CMD ["python", "main.py"]

@@ -86,6 +86,7 @@ services:
       MINIO_REGION: us-east-1
       STORAGE_BUCKET: surveillance-videos
       QDRANT_URL: http://qdrant:6333
+      INFERENCE_ENGINE_URL: http://inference-api:5001
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,6 +96,8 @@ services:
         condition: service_started
       qdrant:
         condition: service_healthy
+      inference-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/healthz || exit 1"]
       interval: 10s
@@ -103,13 +106,45 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  inference-engine:
+  # ── Inference Engine (split into API + Worker) ────────────────────────────
+
+  inference-api:
     build:
       context: ./inference-engine
       dockerfile: Dockerfile
-    container_name: perimeter-inference-engine
+    container_name: perimeter-inference-api
+    # Default CMD in Dockerfile runs main.py (API server)
     ports:
       - "5001:5001"
+    environment:
+      ENGINE_API_PORT: 5001
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      STORAGE_BUCKET: surveillance-videos
+      CROPS_BUCKET: surveillance-crops
+      QDRANT_HOST: qdrant
+      QDRANT_PORT: 6333
+      COLLECTION_NAME: targets
+    depends_on:
+      minio:
+        condition: service_started
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  inference-worker:
+    build:
+      context: ./inference-engine
+      dockerfile: Dockerfile
+    # Override CMD to run the standalone worker entrypoint
+    command: ["python", "worker.py"]
     environment:
       DATABASE_URL: postgresql://postgres:your_secure_password@postgres:5432/perimeter_db?schema=public
       REDIS_HOST: redis
@@ -119,15 +154,17 @@ services:
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
       STORAGE_BUCKET: surveillance-videos
+      CROPS_BUCKET: surveillance-crops
       QDRANT_HOST: qdrant
       QDRANT_PORT: 6333
       COLLECTION_NAME: targets
-      ENGINE_API_PORT: 5001
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      minio:
+        condition: service_started
       qdrant:
         condition: service_healthy
     restart: unless-stopped
@@ -138,6 +175,7 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: http://localhost:3000
+        VITE_MINIO_URL: http://localhost:9000
     container_name: perimeter-frontend
     ports:
       - "80:80"

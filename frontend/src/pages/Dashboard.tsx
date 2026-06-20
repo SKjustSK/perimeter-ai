@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
 import type { Camera, MatchResult } from '@/lib/api';
+import { getCropUrl, formatTimestamp, formatDetectedAt } from '@/lib/api';
 import { CameraMap } from '@/components/map/CameraMap';
-import { MapPin, AlertCircle, RefreshCw, Radio, Search, X, Navigation, Upload, CheckCircle2 } from 'lucide-react';
+import { MapPin, AlertCircle, RefreshCw, Radio, Search, X, Navigation, Upload, CheckCircle2, Clock } from 'lucide-react';
 
 export function Dashboard() {
   const [cameras, setCameras] = useState<Camera[]>([]);
@@ -345,30 +346,51 @@ export function Dashboard() {
               searchResults.map((match, idx) => {
                 const isSelected = selectedMatch === match;
                 const camera = getCameraById(match.cameraId);
+                const cropUrl = getCropUrl(match.cropS3Key);
+                const detectedLabel = formatDetectedAt(match.detectedAt, true) ?? formatTimestamp(match.timestampSeconds) ?? `Frame ${match.frameNumber}`;
                 return (
                   <button
                     key={`${match.jobId}-${match.frameNumber}-${idx}`}
                     onClick={() => handleSelectMatch(match)}
-                    className={`w-full text-left p-3.5 transition-colors hover:bg-muted flex flex-col gap-1.5 ${
+                    className={`w-full text-left p-3.5 transition-colors hover:bg-muted flex items-center gap-3 ${
                       isSelected ? 'bg-secondary' : ''
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-semibold text-xs text-foreground">
-                        {camera ? camera.name : 'Unknown Camera'}
-                      </span>
-                      <span className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full flex items-center gap-1">
-                        <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
-                        {match.confidence}
-                      </span>
+                    {/* Crop thumbnail */}
+                    <div className="shrink-0 w-10 h-12 rounded-md overflow-hidden border border-border bg-muted/50 flex items-center justify-center">
+                      {cropUrl ? (
+                        <img
+                          src={cropUrl}
+                          alt="Person crop"
+                          className="w-full h-full object-cover"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span className="text-[8px] text-muted-foreground text-center leading-tight px-0.5">No img</span>
+                      )}
                     </div>
 
-                    <div className="flex justify-between items-center text-[10px] text-muted-foreground">
-                      <span className="flex items-center gap-0.5">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {camera ? camera.location : 'Unknown'}
-                      </span>
-                      <span className="font-mono">Frame {match.frameNumber}</span>
+                    <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold text-xs text-foreground truncate">
+                          {camera ? camera.name : 'Unknown Camera'}
+                        </span>
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 bg-emerald-100 text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 rounded-full flex items-center gap-1 shrink-0 ml-1">
+                          <CheckCircle2 className="h-2.5 w-2.5 shrink-0" />
+                          {match.confidence}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[10px] text-muted-foreground">
+                        <span className="flex items-center gap-0.5 truncate">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          {camera ? camera.location : 'Unknown'}
+                        </span>
+                        <span className="flex items-center gap-0.5 font-mono shrink-0 ml-1">
+                          <Clock className="h-2.5 w-2.5 shrink-0" />
+                          {detectedLabel}
+                        </span>
+                      </div>
                     </div>
                   </button>
                 );
@@ -382,14 +404,29 @@ export function Dashboard() {
               <span className="text-[9px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
                 Selected Match Details
               </span>
+
+              {/* Crop evidence image */}
+              {getCropUrl(selectedMatch.cropS3Key) && (
+                <div className="mt-2 rounded-lg overflow-hidden border border-border bg-muted/50 flex items-center justify-center" style={{ height: '120px' }}>
+                  <img
+                    src={getCropUrl(selectedMatch.cropS3Key)!}
+                    alt="Matched person crop"
+                    className="h-full object-contain"
+                    onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = 'none'; }}
+                  />
+                </div>
+              )}
+
               <div className="space-y-1.5 pt-1.5">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Camera Node</span>
                   <span className="font-medium text-foreground">{getCameraById(selectedMatch.cameraId)?.name}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Timeline Frame</span>
-                  <span className="font-mono text-foreground">{selectedMatch.frameNumber}</span>
+                  <span className="text-muted-foreground">Detected</span>
+                  <span className="font-mono text-foreground text-right max-w-[60%]">
+                    {formatDetectedAt(selectedMatch.detectedAt) ?? formatTimestamp(selectedMatch.timestampSeconds) ?? `Frame ${selectedMatch.frameNumber}`}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Confidence Score</span>

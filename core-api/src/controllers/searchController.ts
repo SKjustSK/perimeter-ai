@@ -13,7 +13,10 @@ interface TargetPayload {
     camera_id: string;
     job_id: string;
     frame_number: number;
+    timestamp_seconds: number;
+    detected_at: string;
     bbox: [number, number, number, number];
+    crop_s3_key?: string | null;
 }
 
 // Frontend response shape
@@ -38,8 +41,9 @@ export const searchTarget = async (req: Request, res: Response): Promise<any> =>
         });
 
         // Extract vector representation using Python service
+        const inferenceEngineUrl = process.env.INFERENCE_ENGINE_URL || 'http://localhost:5001';
         const pythonResponse = await axios.post<{ vector: number[] }>(
-            'http://localhost:5001/api/vectors/extract', 
+            `${inferenceEngineUrl}/api/vectors/extract`, 
             formData, 
             { 
                 headers: formData.getHeaders(),
@@ -64,7 +68,10 @@ export const searchTarget = async (req: Request, res: Response): Promise<any> =>
                 cameraId: payload.camera_id,
                 jobId: payload.job_id,
                 frameNumber: payload.frame_number,
-                boundingBox: payload.bbox
+                timestampSeconds: payload.timestamp_seconds ?? null,
+                detectedAt: payload.detected_at ?? null,
+                boundingBox: payload.bbox,
+                cropS3Key: payload.crop_s3_key ?? null
             };
         });
 

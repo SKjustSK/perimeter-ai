@@ -11,6 +11,10 @@ COPY . .
 ARG VITE_API_URL=http://localhost:3000
 ENV VITE_API_URL=$VITE_API_URL
 
+# Build with the MinIO URL for direct crop image access
+ARG VITE_MINIO_URL=http://localhost:9000
+ENV VITE_MINIO_URL=$VITE_MINIO_URL
+
 RUN npm run build
 
 # Stage 2: Serve via nginx
