@@ -44,7 +44,8 @@ export const getCameras = async (req: Request, res: Response): Promise<void> => 
 
 export const resetDatabase = async (req: Request, res: Response): Promise<void> => {
   try {
-    // 1. Clear database records (Jobs first due to foreign key constraints)
+    // 1. Clear database records (Child records first due to foreign key constraints)
+    await prisma.detection.deleteMany({});
     await prisma.job.deleteMany({});
     await prisma.camera.deleteMany({});
 

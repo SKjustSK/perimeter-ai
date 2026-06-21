@@ -22,6 +22,7 @@ model Camera {
   latitude  Float
   longitude Float
   jobs      Job[]
+  detections Detection[]
   createdAt DateTime @default(now())
 }
 
@@ -34,4 +35,22 @@ model Job {
   errorLog  String?
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
+  detections Detection[]
+}
+
+model Detection {
+  id               String   @id // Uses Qdrant UUID
+  jobId            String
+  cameraId         String
+  frameNumber      Int
+  timestampSeconds Float
+  detectedAt       DateTime
+  bbox             Json     // [x1, y1, x2, y2]
+  cropS3Key        String?
+
+  job              Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  camera           Camera   @relation(fields: [cameraId], references: [id], onDelete: Cascade)
+
+  @@index([cameraId])
+  @@index([jobId])
 }

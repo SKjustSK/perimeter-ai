@@ -12,7 +12,7 @@ from torchreid.utils import FeatureExtractor
 from dotenv import load_dotenv
 
 from src.config.redis_client import get_redis_client
-from src.config.db import update_job_status
+from src.config.db import update_job_status, insert_detections
 from src.config.s3_client import get_s3_client, init_crops_bucket
 from src.config.qdrant import get_qdrant_client, init_qdrant_collection
 from qdrant_client.http.models import PointStruct
@@ -112,6 +112,7 @@ def start_worker_loop():
                 prev_gray = None
                 frame_count = 0
                 points_to_upload = []
+                postgres_records = []
 
                 while True:
                     ret, frame = cap.read()
@@ -173,26 +174,33 @@ def start_worker_loop():
                             # Persist crop image to MinIO so search results are visually verifiable
                             crop_s3_key = _persist_crop(s3, crops_bucket, job_id, frame_count, frame_crops[i])
 
+                            det_id = str(uuid.uuid4())
+                            
+                            # Build tuple for Postgres: (id, jobId, cameraId, frameNumber, timestampSeconds, detectedAt, bbox, cropS3Key)
+                            postgres_records.append((
+                                det_id,
+                                job_id,
+                                camera_id,
+                                frame_count,
+                                timestamp_seconds,
+                                detected_at,
+                                json.dumps(list(box)),
+                                crop_s3_key
+                            ))
+
                             points_to_upload.append(
                                 PointStruct(
-                                    id=str(uuid.uuid4()),
+                                    id=det_id,
                                     vector=embedding_vector,
-                                    payload={
-                                        "job_id": job_id,
-                                        "camera_id": camera_id,
-                                        "frame_number": frame_count,
-                                        "timestamp_seconds": timestamp_seconds,
-                                        "detected_at": detected_at,
-                                        "bbox": list(box),
-                                        "crop_s3_key": crop_s3_key  # enables thumbnail rendering in search results
-                                    }
+                                    payload={}  # Metadata now stored in Postgres
                                 )
                             )
 
-                # Push vectors to database if any targets were detected
+                # Push vectors to database and Qdrant if any targets were detected
                 if points_to_upload:
                     q_client.upsert(collection_name=collection_name, points=points_to_upload)
-                    print(f"[+] Successfully pushed {len(points_to_upload)} vector points to Qdrant.")
+                    insert_detections(postgres_records)
+                    print(f"[+] Successfully pushed {len(points_to_upload)} vector points to Qdrant and metadata to Postgres.")
                 else:
                     print("[-] No valid targets identified in video sample.")
 
