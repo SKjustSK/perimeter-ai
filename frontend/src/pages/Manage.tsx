@@ -27,8 +27,8 @@ export function Manage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Background polling ref
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Background polling ref — replaced by SSE
+  // (kept as a comment so the diff is easy to follow)
 
   // System Reset states
   const [isResetting, setIsResetting] = useState(false);
@@ -84,39 +84,39 @@ export function Manage() {
     }
   };
 
-  // Run on mount
+  // Run on mount: load initial state from DB, then open SSE stream for future updates
   useEffect(() => {
     fetchCameras();
     fetchJobs();
-
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-    };
   }, []);
 
-  // Monitor jobs and trigger polling if any are active
+  // SSE: subscribe to real-time job status updates pushed from the server.
+  // Each status change from the Python worker is published to Redis, which the
+  // Core API forwards here instantly — no polling, no repeated DB queries.
   useEffect(() => {
-    const hasActiveJobs = jobs.some(
-      (job) => job.status === 'PENDING' || job.status === 'QUEUED' || job.status === 'PROCESSING'
-    );
+    const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const es = new EventSource(`${API_BASE}/api/videos/stream`);
 
-    if (hasActiveJobs) {
-      if (!pollIntervalRef.current) {
-        console.log('[*] Active jobs detected. Starting polling interval.');
-        pollIntervalRef.current = setInterval(() => {
-          fetchJobs();
-        }, 4000); // Poll every 4 seconds
+    es.onmessage = (event) => {
+      try {
+        const update: { job_id: string; status: Job['status'] } = JSON.parse(event.data);
+        setJobs((prev) =>
+          prev.map((j) => (j.id === update.job_id ? { ...j, status: update.status } : j))
+        );
+      } catch {
+        // Malformed message — ignore
       }
-    } else {
-      if (pollIntervalRef.current) {
-        console.log('[*] All jobs processed. Stopping polling.');
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
-      }
-    }
-  }, [jobs]);
+    };
+
+    es.onerror = () => {
+      // EventSource auto-reconnects on error; log but don't crash
+      console.warn('[-] SSE connection error — browser will retry automatically.');
+    };
+
+    return () => {
+      es.close();
+    };
+  }, []);
 
   // Form handlers
   const handleAddCamera = async (e: React.FormEvent) => {

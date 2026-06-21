@@ -4,6 +4,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import prisma from '../config/prisma.js';
 import redisClient from '../config/redis.js';
 import s3Client from '../config/s3.js';
+import { sseEmitter } from '../config/sseEmitter.js';
 
 export const getUploadUrl = async (req: Request, res: Response): Promise<void> => {
   const { fileName, cameraId } = req.body;
@@ -129,4 +130,31 @@ export const getJobs = async (req: Request, res: Response): Promise<void> => {
     console.error('[-] Error fetching jobs list:', error);
     res.status(500).json({ error: 'Failed to retrieve jobs list' });
   }
+};
+
+export const streamJobUpdates = (req: Request, res: Response): void => {
+  // SSE headers — disable all buffering so events flush to the browser instantly
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx proxy buffering
+  res.flushHeaders();
+
+  // Attach to the process-wide EventEmitter (backed by one shared Redis subscriber).
+  // No new Redis connections are created — N tabs cost the same as 1 tab.
+  const handler = (message: string) => res.write(`data: ${message}\n\n`);
+  sseEmitter.on('job:update', handler);
+
+  // Keepalive comment every 30s — prevents proxies/LBs from closing the idle stream.
+  // SSE comment lines (starting with ':') are silently ignored by EventSource.
+  const keepalive = setInterval(() => res.write(': keepalive\n\n'), 30_000);
+
+  // Clean up when the browser tab closes or navigates away
+  req.on('close', () => {
+    clearInterval(keepalive);
+    sseEmitter.off('job:update', handler);
+    console.log('[-] SSE client disconnected');
+  });
+
+  console.log('[+] SSE client connected');
 };
