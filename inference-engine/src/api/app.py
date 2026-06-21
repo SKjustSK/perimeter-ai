@@ -8,20 +8,23 @@ from torchreid.utils import FeatureExtractor
 
 app = FastAPI(title="Perimeter AI Core Engine API")
 
-# Initialize a dedicated OSNet instance for the API thread
-print("[*] Loading OSNet into API memory space...")
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+# The API's OSNet instance is intentionally pinned to CPU.
+# The video worker (engine.py) uses the GPU for batch frame processing.
+# Keeping these on separate compute resources eliminates GPU contention:
+# search queries never compete with an active video pipeline for GPU time.
+# Single-image inference on CPU is ~80ms — imperceptible for interactive search.
+print("[*] Loading OSNet into API memory space (CPU)...")
 osnet_extractor = FeatureExtractor(
     model_name='osnet_x1_0',
-    model_path='', 
-    device=device
+    model_path='',
+    device='cpu'  # intentionally CPU — GPU reserved for the video worker
 )
-print(f"[✓] API OSNet instance loaded on: {device.upper()}")
+print("[✓] API OSNet instance loaded on: CPU")
 
 # Existing Health Check Route
 @app.get("/health")
 async def health_check():
-    return {"status": "HEALTHY", "device": device}
+    return {"status": "HEALTHY", "device": "cpu"}
 
 # Vector Extraction Route for Synchronous Searches
 @app.post("/api/vectors/extract")
